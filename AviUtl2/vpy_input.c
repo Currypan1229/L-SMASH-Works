@@ -290,7 +290,7 @@ fail:
     return NULL;
 }
 
-static int get_video_track
+static int find_video
 (
     lsmash_handler_t *h,
     video_option_t   *opt
@@ -299,10 +299,25 @@ static int get_video_track
     vpy_handler_t *hp = (vpy_handler_t *)h->video_private;
     if( hp->vi->numFrames <= 0 )
         return -1;
+
+    h->video_track_count = 1;
+    return 0;
+}
+
+static int get_video_track
+(
+    lsmash_handler_t *h,
+    reader_option_t   *opt,
+    int              index
+)
+{
+    vpy_handler_t *hp = (vpy_handler_t *)h->video_private;
+    if( hp->vi->numFrames <= 0 )
+        return -1;
     hp->av_frame = av_frame_alloc();
     if( !hp->av_frame )
         return -1;
-    return prepare_video_decoding( h, opt );
+    return prepare_video_decoding( h, &opt->video_opt );
 }
 
 static int read_video
@@ -378,6 +393,8 @@ lsmash_reader_t vpy_reader =
 {
     VPY_READER,
     open_file,
+    find_video,
+    NULL,
     get_video_track,
     NULL,
     NULL,
@@ -387,5 +404,6 @@ lsmash_reader_t vpy_reader =
     NULL,
     video_cleanup,
     NULL,
-    close_file
+    close_file,
+    NULL
 };

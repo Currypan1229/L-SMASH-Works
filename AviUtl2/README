@@ -1,12 +1,9 @@
 [File]
-    lwinput.aui     : An input plugin for AviUtl
-    lwmuxer.auf     : A filter plugin to multiplex file for AviUtl
-    lwdumper.auf    : A filter plugin to dump file for AviUtl
-    lwcolor.auc     : A color space conversion plugin for AviUtl
+    lwinput.aui2    : An input plugin for AviUtl ExEdit2
 
-[lwinput.aui: L-SMASH Works File Reader]
+[lwinput.aui2: L-SMASH Works File Reader for AviUtl2]
     [Settings]
-        You can open the settings dialog by "File" -> "General settings" -> "Input plugins configure" -> "L-SMASH Works File Reader".
+        You can open the settings dialog by "Setting" -> "InputPlugin" -> Right click "L-SMASH Works File Reader for AviUtl2" -> "SettingPlugin".
         [File readers]
             L-SMASH Works File Reader tries in order of "Libav+L-SMASH" -> "AviSynth Script" -> "LW-Libav".
             + Libav+L-SMASH   : check box (default : checked)
@@ -56,10 +53,6 @@
                 The scaling algorithm for chroma upsamling.
                 This settings is applied for progressive or non-YUV4:2:0 frames.
                 For interlaced YUV4:2:0 frames, apply 5-3-7-1 interlaced YUV4:2:0 interpolation based on MPEG-2 Video chroma location.
-            + VFR->CFR : check box (default : unchecked) / edit box (default : 60000 / 1001 )
-                Output frame rate (numerator / denominator at frames per second) for VFR->CFR (Variable Frame Rate to Constant Frame Rate) conversion.
-                If checked and set to a valid value, the conversion is achieved by padding and/or dropping frames at the specified frame rate.
-                Otherwise, output frame rate is set to a computed average frame rate and the output process is performed by actual frame-by-frame.
             + LW48 output : check box (default : unchecked)
                 LW48 is a pixel format and a color space defined in L-SMASH Works.
                 The difference between LW48 and YC48 is the usual ranges of each component; Y/Cb/Cr.
@@ -170,14 +163,6 @@
                 Create the index file (.lwi) if checked.
                 The index file avoids parsing all frames in the input file at the next or later access.
                 Parsing all frames is very important for frame accurate seek.
-            + Libav video index : check box (default : unchecked) / edit box (default : -1)
-                Try to activate a video stream specified if checked.
-                The value -1 deactivates any video stream.
-                If unchecked, try to activate a video stream which has the largest resolution.
-            + Libav audio index : check box (default : unchecked) / edit box (default : -1)
-                Try to activate a audio stream specified if checked.
-                The value -1 deactivates any audio stream.
-                If unchecked, try to activate the first detected audio stream.
             + Apply repeat flag : check box (default : checked)
                 Reconstruct frames by the flags specified in video stream if checked and usable.
                 Note that this option is ignored when VFR->CFR conversion is enabled.
@@ -197,38 +182,6 @@
                 Specify the directory where you want to create the index file by absolute path.
                 If the path entered in the edit box is valid, create the index file in the specified directory.
                 If the path entered in the edit box is invalid, create an "lwi" directory in the same directory as lwinput.aui and create the index file in that directory.
-        [Dummy reader]
-            Dummy reader is used when deactivating video stream or the input file has no video stream
-            since AviUtl can't handle any input file without video stream.
-            + Dummy resolution : edit box (default : 720 x 480 )
-                A resolution (width x height) of dummy video stream.
-            + Dummy framerate  : edit box (default : 24 / 1 )
-                A framerate (numerator / denominator at frames per second) of dummy video stream.
-                Larger framerate helps more sample accurate editing.
-            + Dummy colorspace : combo box (default : YUY2)
-                A colorspace of dummy video stream.
         [Settings Dialog]
             + Wide Dialog : check box (default : unchecked)
                 The layout of the settings dialog becomes two columns.
-[lwmuxer.auf: L-SMASH Works Muxer]
-    This plugin supports only file formats derived from ISO Base Media (ISO/IEC 14496-12) and QuickTime (MOV) currently.
-    [Settings]
-        You can open the settings dialog box by "File" -> "Export" -> "L-SMASH Works Muxer".
-        + Chapter
-            Specify a path of simple text file which describes chapters.
-            For all ISO Base Media file format, a chapter list will be written.
-            For iTunes MP4 (known as M4A, M4V ...) or QuickTime file format (known as MOV), a reference chapter track will be written.
-        + Optimize for Progressive Download : check box (default : checked)
-            Move overall necessary data to access and decode samples into the very front of the file at the end of muxing if checked.
-[lwdumper.auf: L-SMASH Works Dumper]
-    This plugin supports only file formats derived from ISO Base Media (ISO/IEC 14496-12) and QuickTime (MOV) currently.
-    You can open the save dialog box by "File" -> "Export" -> "L-SMASH Works Dumper".
-        + Dump File (*.txt)
-            Write a text file which shows box structures.
-        + Timecode v2 File (*.tmc)
-            Write a mkvmerge timecode v2 file.
-[lwcolor.auc: L-SMASH Works Color Space Converter]
-    This plugin is used for the direct copying of LW48 into AviUtl internal YC48, and vice versa.
-    That is, AviUtl can handle LW48 directly as if it is YC48.
-    You can enable functions of this plugin by "Settings" -> "Color conversion" -> "LW ColorSpace".
-    If enabled, there is no operation other than copy for LW48<->YC48 conversion.

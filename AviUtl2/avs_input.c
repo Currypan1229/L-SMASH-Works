@@ -308,7 +308,27 @@ static void *open_file( char *file_name, reader_option_t *opt )
     return hp;
 }
 
-static int get_video_track( lsmash_handler_t *h, video_option_t *opt )
+static int find_video( lsmash_handler_t *h, video_option_t *opt )
+{
+    avs_handler_t *hp = (avs_handler_t *)h->video_private;
+    if( hp->vi->num_frames <= 0 || hp->vi->width <= 0 || hp->vi->height <= 0 )
+        return -1;
+
+    h->video_track_count = 1;
+    return 0;
+}
+
+static int find_audio( lsmash_handler_t *h, audio_option_t *opt )
+{
+    avs_handler_t *hp = (avs_handler_t *)h->audio_private;
+    if( hp->vi->num_audio_samples <= 0 )
+        return -1;
+
+    h->audio_track_count = 1;
+    return 0;
+}
+
+static int get_video_track( lsmash_handler_t *h, reader_option_t *opt, int index )
 {
     avs_handler_t *hp = (avs_handler_t *)h->video_private;
     if( hp->vi->num_frames <= 0 || hp->vi->width <= 0 || hp->vi->height <= 0 )
@@ -316,16 +336,16 @@ static int get_video_track( lsmash_handler_t *h, video_option_t *opt )
     hp->av_frame = av_frame_alloc();
     if( !hp->av_frame )
         return -1;
-    hp->bit_depth = opt->avs.bit_depth;
-    return prepare_video_decoding( h, opt );
+    hp->bit_depth = opt->video_opt.avs.bit_depth;
+    return prepare_video_decoding( h, &opt->video_opt );
 }
 
-static int get_audio_track( lsmash_handler_t *h, audio_option_t *opt )
+static int get_audio_track( lsmash_handler_t *h, reader_option_t *opt, int index )
 {
     avs_handler_t *hp = (avs_handler_t *)h->audio_private;
     if( hp->vi->num_audio_samples <= 0 )
         return -1;
-    return prepare_audio_decoding( h, opt );
+    return prepare_audio_decoding( h, &opt->audio_opt );
 }
 
 static int read_video( lsmash_handler_t *h, int sample_number, void *buf )
@@ -415,6 +435,8 @@ lsmash_reader_t avs_reader =
 {
     AVS_READER,
     open_file,
+    find_video,
+    find_audio,
     get_video_track,
     get_audio_track,
     NULL,
@@ -424,5 +446,6 @@ lsmash_reader_t avs_reader =
     delay_audio,
     video_cleanup,
     NULL,
-    close_file
+    close_file,
+    NULL
 };

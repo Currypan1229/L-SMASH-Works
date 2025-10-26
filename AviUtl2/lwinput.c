@@ -58,6 +58,7 @@
 #define VAPOURSYNTH_FILE_EXT "*.vpy"
 #define SUPPORTED_FILE_EXT  MPEG4_FILE_EXT ";" VIDEO_FILE_EXT ";" AUDIO_FILE_EXT ";" INDEX_FILE_EXT ";" AVISYNTH_FILE_EXT ";" VAPOURSYNTH_FILE_EXT
 
+
 static char plugin_information[512] = { 0 };
 static char* plugin_dir = NULL;
 static char* default_index_dir = NULL;
@@ -66,7 +67,7 @@ static HMODULE hModuleDLL = NULL;
 static void get_plugin_information( void )
 {
     sprintf( plugin_information,
-             "L-SMASH Works File Reader r%s\n"
+             "L-SMASH Works File Reader for AviUtl2 r%s\n"
              "    libavutil %s : %s\n"
              "    libavcodec %s : %s\n"
              "    libavformat %s : %s\n"
@@ -82,39 +83,26 @@ static void get_plugin_information( void )
 
 INPUT_PLUGIN_TABLE input_plugin_table =
 {
-    INPUT_PLUGIN_FLAG_VIDEO | INPUT_PLUGIN_FLAG_AUDIO,              /* INPUT_PLUGIN_FLAG_VIDEO : support images
-                                                                     * INPUT_PLUGIN_FLAG_AUDIO : support audio */
-    "L-SMASH Works File Reader",                                    /* Name of plugin */
-    "MPEG-4 File (" MPEG4_FILE_EXT ")\0" MPEG4_FILE_EXT "\0"        /* Filter for Input file */
-    "LW-Libav Index File (" INDEX_FILE_EXT ")\0" INDEX_FILE_EXT "\0"
-    "Any File (" ANY_FILE_EXT ")\0" ANY_FILE_EXT "\0",
-    "L-SMASH Works File Reader r" LSMASHWORKS_REV " by Mr-Ojii\0",  /* Information of plugin */
-    func_init,                                                      /* Pointer to function called when opening DLL (If NULL, won't be called.) */
-    func_exit,                                                      /* Pointer to function called when closing DLL (If NULL, won't be called.) */
-    func_open,                                                      /* Pointer to function to open input file */
-    func_close,                                                     /* Pointer to function to close input file */
-    func_info_get,                                                  /* Pointer to function to get information of input file */
-    func_read_video,                                                /* Pointer to function to read image data */
-    func_read_audio,                                                /* Pointer to function to read audio data */
-    func_is_keyframe,                                               /* Pointer to function to check if it is a keyframe or not (If NULL, all is keyframe.) */
-    func_config,                                                    /* Pointer to function called when configuration dialog is required */
+    INPUT_PLUGIN_FLAG_VIDEO | INPUT_PLUGIN_FLAG_AUDIO | INPUT_PLUGIN_FLAG_MULTI_TRACK,
+    L"L-SMASH Works File Reader for AviUtl2",
+    L"Supported File (" SUPPORTED_FILE_EXT ")\0" SUPPORTED_FILE_EXT "\0"
+    L"Any File (" ANY_FILE_EXT ")\0" ANY_FILE_EXT "\0",
+    L"L-SMASH Works File Reader for AviUtl2 r" LSMASHWORKS_REV L" by Mr-Ojii\0",
+    func_open,
+    func_close,
+    func_info_get,
+    func_read_video,
+    func_read_audio,
+    func_config,
+    func_set_track,
+    func_time_to_frame,
 };
 
 EXTERN_C INPUT_PLUGIN_TABLE __declspec(dllexport) * __stdcall GetInputPluginTable( void )
 {
-    wchar_t *exe_path;
-    if ( lw_GetModuleFileNameW( NULL, &exe_path ) ) {
-        wchar_t* p = exe_path;
-        while(*p != L'\0')
-                p++;
-        while(*p != L'\\')
-                p--;
-        p++;
-        if ( wcscmp( p, L"pipe32aui.exe" ) == 0 ) {
-            MessageBoxA( HWND_DESKTOP, "Use lwinput.aui with AviUtl ExEdit2 is deprecated.\nUse lwinput.aui2 instead.", "lwinput", MB_OK );
-        }
-        lw_free( exe_path );
-    }
+    // In AviUtl ExEdit2, func_init is obsolete.
+    // In the sample code, it is called in DLL_PROCESS_ATTACH, but since the program freezes, it is called here.
+    func_init();
 
     return &input_plugin_table;
 }
@@ -132,7 +120,6 @@ static audio_option_t *audio_opt_config = &lwinput_opt_config.reader_opt.audio_o
 static const char *settings_path = NULL;
 static const char *settings_path_list[] = { "lsmash.ini", "plugins/lsmash.ini" };
 static const char *seek_mode_list[] = { "Normal", "Unsafe", "Aggressive" };
-static const char *dummy_colorspace_list[] = { "YUY2", "RGB", "YC48" };
 static const char *scaler_list[] = { "Fast bilinear", "Bilinear", "Bicubic", "Experimental", "Nearest neighbor", "Area averaging",
                                      "L-bicubic/C-bilinear", "Gaussian", "Sinc", "Lanczos", "Bicubic spline" };
 static const char *field_dominance_list[] = { "Obey source flags", "Top -> Bottom", "Bottom -> Top" };
@@ -276,24 +263,8 @@ static void get_settings( lwinput_option_t *_lwinput_opt )
         if( !fgets( buf, sizeof(buf), ini ) || sscanf( buf, "no_create_index=%d", &_reader_opt->no_create_index ) != 1 )
             _reader_opt->no_create_index = 0;
         /* force stream index */
-        if( !fgets( buf, sizeof(buf), ini )
-         || sscanf( buf, "force_video_index=%d:%d",
-                    &_reader_opt->force_video, &_reader_opt->force_video_index ) != 2 )
-        {
-            _reader_opt->force_video       = 0;
-            _reader_opt->force_video_index = -1;
-        }
-        else
-            _reader_opt->force_video_index = MAX( _reader_opt->force_video_index, -1 );
-        if( !fgets( buf, sizeof(buf), ini )
-         || sscanf( buf, "force_audio_index=%d:%d",
-                    &_reader_opt->force_audio, &_reader_opt->force_audio_index ) != 2 )
-        {
-            _reader_opt->force_audio       = 0;
-            _reader_opt->force_audio_index = -1;
-        }
-        else
-            _reader_opt->force_audio_index = MAX( _reader_opt->force_audio_index, -1 );
+        fgets( buf, sizeof(buf), ini ); /* force_video_index is deleted, for compatibility */
+        fgets( buf, sizeof(buf), ini ); /* force_audio_index is deleted, for compatibility */
         /* seek_mode */
         if( !fgets( buf, sizeof(buf), ini ) || sscanf( buf, "seek_mode=%d", &_video_opt->seek_mode ) != 1 )
             _video_opt->seek_mode = 0;
@@ -317,22 +288,8 @@ static void get_settings( lwinput_option_t *_lwinput_opt )
             _video_opt->field_dominance = 0;
         else
             _video_opt->field_dominance = CLIP_VALUE( _video_opt->field_dominance, 0, 2 );
-        /* VFR->CFR */
-        if( !fgets( buf, sizeof(buf), ini )
-         || sscanf( buf, "vfr2cfr=%d:%d:%d",
-                    &_video_opt->vfr2cfr.active,
-                    &_video_opt->vfr2cfr.framerate_num,
-                    &_video_opt->vfr2cfr.framerate_den ) != 3 )
-        {
-            _video_opt->vfr2cfr.active        = 0;
-            _video_opt->vfr2cfr.framerate_num = 60000;
-            _video_opt->vfr2cfr.framerate_den = 1001;
-        }
-        else
-        {
-            _video_opt->vfr2cfr.framerate_num = MAX( _video_opt->vfr2cfr.framerate_num, 1 );
-            _video_opt->vfr2cfr.framerate_den = MAX( _video_opt->vfr2cfr.framerate_den, 1 );
-        }
+        /* VFR->CFR (deleted, for compatibility ) */
+        fgets( buf, sizeof(buf), ini );
         /* LW48 output */
         if( !fgets( buf, sizeof(buf), ini ) || sscanf( buf, "colorspace=%d", (int *)&_video_opt->colorspace ) != 1 )
             _video_opt->colorspace = 0;
@@ -383,32 +340,9 @@ static void get_settings( lwinput_option_t *_lwinput_opt )
         if( !fgets( buf, sizeof(buf), ini ) || sscanf( buf, "libav_disabled=%d",      &_lwinput_opt->reader_disabled[3] ) != 1 )
             _lwinput_opt->reader_disabled[3] = 0;
         /* dummy reader */
-        if( !fgets( buf, sizeof(buf), ini )
-         || sscanf( buf, "dummy_resolution=%dx%d", &_video_opt->dummy.width, &_video_opt->dummy.height ) != 2 )
-        {
-            _video_opt->dummy.width  = 720;
-            _video_opt->dummy.height = 480;
-        }
-        else
-        {
-            _video_opt->dummy.width  = MAX( _video_opt->dummy.width,  32 );
-            _video_opt->dummy.height = MAX( _video_opt->dummy.height, 32 );
-        }
-        if( !fgets( buf, sizeof(buf), ini )
-         || sscanf( buf, "dummy_framerate=%d/%d", &_video_opt->dummy.framerate_num, &_video_opt->dummy.framerate_den ) != 2 )
-        {
-            _video_opt->dummy.framerate_num = 24;
-            _video_opt->dummy.framerate_den = 1;
-        }
-        else
-        {
-            _video_opt->dummy.framerate_num = MAX( _video_opt->dummy.framerate_num, 1 );
-            _video_opt->dummy.framerate_den = MAX( _video_opt->dummy.framerate_den, 1 );
-        }
-        if( !fgets( buf, sizeof(buf), ini ) || sscanf( buf, "dummy_colorspace=%d", (int *)&_video_opt->dummy.colorspace ) != 1 )
-            _video_opt->dummy.colorspace = OUTPUT_YUY2;
-        else
-            _video_opt->dummy.colorspace = CLIP_VALUE( _video_opt->dummy.colorspace, 0, 2 );
+        fgets( buf, sizeof(buf), ini ); // dummy_resolution is deleted, for compatibility
+        fgets( buf, sizeof(buf), ini ); // dummy_framerate is deleted, for compatibility
+        fgets( buf, sizeof(buf), ini ); // dummy_colorspace is deleted, for compatibility
         /* preferred decoders settings */
         char preferred_decoder_names[512] = { 0 };
         if( !fgets( buf, sizeof(buf), ini ) || sscanf( buf, "preferred_decoders=%s", preferred_decoder_names ) != 1 )
@@ -468,15 +402,7 @@ static void get_settings( lwinput_option_t *_lwinput_opt )
         _video_opt->scaler                  = 0;
         _video_opt->apply_repeat_flag       = 1;
         _video_opt->field_dominance         = 0;
-        _video_opt->vfr2cfr.active          = 0;
-        _video_opt->vfr2cfr.framerate_num   = 60000;
-        _video_opt->vfr2cfr.framerate_den   = 1001;
         _video_opt->colorspace              = 0;
-        _video_opt->dummy.width             = 720;
-        _video_opt->dummy.height            = 480;
-        _video_opt->dummy.framerate_num     = 24;
-        _video_opt->dummy.framerate_den     = 1;
-        _video_opt->dummy.colorspace        = OUTPUT_YUY2;
         _video_opt->avs.bit_depth           = 8;
         _lwinput_opt->audio_delay           = 0;
         _lwinput_opt->delete_old_cache      = 1;
@@ -511,9 +437,9 @@ static void save_settings( lwinput_option_t *_lwinput_opt ) {
     fprintf( ini, "av_sync=%d\n", _reader_opt->av_sync );
     /* no_create_index */
     fprintf( ini, "no_create_index=%d\n", _reader_opt->no_create_index );
-    /* force stream index */
-    fprintf( ini, "force_video_index=%d:%d\n", _reader_opt->force_video, _reader_opt->force_video_index );
-    fprintf( ini, "force_audio_index=%d:%d\n", _reader_opt->force_audio, _reader_opt->force_audio_index );
+    /* force stream index (deleted, for compatibility) */
+    fprintf( ini, "force_video_index=%d:%d\n", 0, -1 );
+    fprintf( ini, "force_audio_index=%d:%d\n", 0, -1 );
     /* seek_mode */
     fprintf( ini, "seek_mode=%d\n", _video_opt->seek_mode );
     /* forward_seek_threshold */
@@ -524,8 +450,8 @@ static void save_settings( lwinput_option_t *_lwinput_opt ) {
     fprintf( ini, "apply_repeat_flag=%d\n", _video_opt->apply_repeat_flag );
     /* field_dominance */
     fprintf( ini, "field_dominance=%d\n", _video_opt->field_dominance );
-    /* VFR->CFR */
-    fprintf( ini, "vfr2cfr=%d:%d:%d\n", _video_opt->vfr2cfr.active, _video_opt->vfr2cfr.framerate_num, _video_opt->vfr2cfr.framerate_den );
+    /* VFR->CFR (deleted, for compatibility) */
+    fprintf( ini, "vfr2cfr=%d:%d:%d\n", 0, 60000, 1001 );
     /* LW48 output */
     fprintf( ini, "colorspace=%d\n", _video_opt->colorspace );
     /* AVS bit-depth */
@@ -546,10 +472,10 @@ static void save_settings( lwinput_option_t *_lwinput_opt ) {
     fprintf( ini, "avs_disabled=%d\n",        _lwinput_opt->reader_disabled[1] );
     fprintf( ini, "vpy_disabled=%d\n",        _lwinput_opt->reader_disabled[2] );
     fprintf( ini, "libav_disabled=%d\n",      _lwinput_opt->reader_disabled[3] );
-    /* dummy reader */
-    fprintf( ini, "dummy_resolution=%dx%d\n", _video_opt->dummy.width, _video_opt->dummy.height );
-    fprintf( ini, "dummy_framerate=%d/%d\n",  _video_opt->dummy.framerate_num, _video_opt->dummy.framerate_den );
-    fprintf( ini, "dummy_colorspace=%d\n",    _video_opt->dummy.colorspace );
+    /* dummy reader (deleted, for compatibility) */
+    fprintf( ini, "dummy_resolution=%dx%d\n", 720, 480 );
+    fprintf( ini, "dummy_framerate=%d/%d\n",  24, 1 );
+    fprintf( ini, "dummy_colorspace=%d\n",    0 );
     /* preferred decoders */
     fprintf( ini, "preferred_decoders=%s\n", _reader_opt->preferred_decoder_names_original_buf );
     /* handle cache (deleted, for compatibility) */
@@ -680,10 +606,10 @@ BOOL func_exit( void ) {
     return TRUE;
 }
 
-INPUT_HANDLE func_open( LPSTR filea )
+INPUT_HANDLE func_open( LPCWSTR filew )
 {
     char* file = NULL;
-    lw_convert_mb_string( CP_ACP, CP_UTF8, filea, &file );
+    lw_string_from_wchar( CP_UTF8, filew, &file );
     if( !file )
         return NULL;
 
@@ -700,12 +626,10 @@ INPUT_HANDLE func_open( LPSTR filea )
     extern lsmash_reader_t avs_reader;
     extern lsmash_reader_t vpy_reader;
     extern lsmash_reader_t libav_reader;
-    extern lsmash_reader_t dummy_reader;
     enum
     {
         AU_VIDEO_READER  = 1,
-        AU_SCRIPT_READER = 2,
-        AU_DUMMY_READER  = 3
+        AU_SCRIPT_READER = 2
     };
     static const struct
     {
@@ -717,7 +641,6 @@ INPUT_HANDLE func_open( LPSTR filea )
             { &avs_reader       , AU_SCRIPT_READER },
             { &vpy_reader       , AU_SCRIPT_READER },
             { &libav_reader     , AU_VIDEO_READER  },
-            { &dummy_reader     , AU_DUMMY_READER  },
             { NULL              , 0                }
         };
     for( int i = 0; lsmash_reader_table[i].reader; i++ )
@@ -734,14 +657,17 @@ INPUT_HANDLE func_open( LPSTR filea )
             if( !hp->video_private )
             {
                 hp->video_private = private_stuff;
-                if( reader.get_video_track
-                 && reader.get_video_track( hp, video_opt ) == 0 )
+                if( reader.find_video
+                 && reader.find_video( hp, video_opt ) == 0 )
                 {
-                    hp->video_reader     = reader.type;
-                    hp->read_video       = reader.read_video;
-                    hp->is_keyframe      = reader.is_keyframe;
-                    hp->video_cleanup    = reader.video_cleanup;
-                    hp->close_video_file = reader.close_file;
+                    hp->video_reader             = reader.type;
+                    hp->get_video_track          = reader.get_video_track;
+                    hp->read_video               = reader.read_video;
+                    hp->is_keyframe              = reader.is_keyframe;
+                    hp->video_cleanup            = reader.video_cleanup;
+                    hp->destroy_video_disposable = reader.destroy_disposable;
+                    hp->close_video_file         = reader.close_file;
+                    hp->time_to_frame            = reader.time_to_frame;
                     video_none = 0;
                 }
                 else
@@ -750,14 +676,16 @@ INPUT_HANDLE func_open( LPSTR filea )
             if( !hp->audio_private )
             {
                 hp->audio_private = private_stuff;
-                if( reader.get_audio_track
-                 && reader.get_audio_track( hp, audio_opt ) == 0 )
+                if( reader.find_audio
+                 && reader.find_audio( hp, audio_opt ) == 0 )
                 {
-                    hp->audio_reader     = reader.type;
-                    hp->read_audio       = reader.read_audio;
-                    hp->delay_audio      = reader.delay_audio;
-                    hp->audio_cleanup    = reader.audio_cleanup;
-                    hp->close_audio_file = reader.close_file;
+                    hp->audio_reader             = reader.type;
+                    hp->get_audio_track          = reader.get_audio_track;
+                    hp->read_audio               = reader.read_audio;
+                    hp->delay_audio              = reader.delay_audio;
+                    hp->audio_cleanup            = reader.audio_cleanup;
+                    hp->destroy_audio_disposable = reader.destroy_disposable;
+                    hp->close_audio_file         = reader.close_file;
                     audio_none = 0;
                 }
                 else
@@ -769,9 +697,6 @@ INPUT_HANDLE func_open( LPSTR filea )
             if( reader.close_file )
                 reader.close_file( private_stuff );
         }
-        else
-            if( reader.destroy_disposable )
-                reader.destroy_disposable( private_stuff );
         /* Found both video and audio reader. */
         if( hp->video_reader != READER_NONE && hp->audio_reader != READER_NONE )
             break;
@@ -780,15 +705,18 @@ INPUT_HANDLE func_open( LPSTR filea )
             if( hp->video_reader == reader.type )
                 break;
             if( hp->audio_reader == reader.type )
-                i = DUMMY_READER - 2;
+                i = LIBAV_READER - 1;
         }
     }
     if( hp->video_reader == hp->audio_reader )
     {
-        hp->global_private = hp->video_private;
-        hp->close_file     = hp->close_video_file;
-        hp->close_video_file = NULL;
-        hp->close_audio_file = NULL;
+        hp->global_private           = hp->video_private;
+        hp->destroy_disposable       = hp->destroy_video_disposable;
+        hp->destroy_video_disposable = NULL;
+        hp->destroy_audio_disposable = NULL;
+        hp->close_file               = hp->close_video_file;
+        hp->close_video_file         = NULL;
+        hp->close_audio_file         = NULL;
     }
     if( hp->video_reader == READER_NONE && hp->audio_reader == READER_NONE )
     {
@@ -802,7 +730,52 @@ INPUT_HANDLE func_open( LPSTR filea )
     return hp;
 }
 
-BOOL func_close( INPUT_HANDLE ih )
+int func_set_track( INPUT_HANDLE ih, int type, int index )
+{
+    lsmash_handler_t *hp = (lsmash_handler_t *)ih;
+    if( index == -1 )
+    {
+        if( type == TRACK_TYPE_VIDEO )
+            return hp->video_track_count;
+        else if( type == TRACK_TYPE_AUDIO )
+            return hp->audio_track_count;
+
+        return 0;
+    }
+
+    if( type == TRACK_TYPE_VIDEO )
+    {
+        if( hp->get_video_track ) {
+            int ret = hp->get_video_track( hp, reader_opt, index );
+            
+            if( hp->destroy_video_disposable )
+                hp->destroy_video_disposable( hp->video_private );
+            
+            return ret;
+        }
+        return -1;
+    }
+    else if( type == TRACK_TYPE_AUDIO )
+    {
+        if( hp->get_audio_track ) {
+            int ret = hp->get_audio_track( hp, reader_opt, index );
+
+            if( hp->destroy_audio_disposable )
+                hp->destroy_audio_disposable( hp->audio_private );
+
+            /* Assuming that called in the order of video -> audio */
+            if( hp->destroy_disposable )
+                hp->destroy_disposable( hp->global_private );
+
+            return ret;
+        }
+        return -1;
+    }
+
+    return -1;
+}
+
+bool func_close( INPUT_HANDLE ih )
 {
     lsmash_handler_t *hp = (lsmash_handler_t *)ih;
     if( !hp )
@@ -824,7 +797,7 @@ BOOL func_close( INPUT_HANDLE ih )
     return TRUE;
 }
 
-BOOL func_info_get( INPUT_HANDLE ih, INPUT_INFO *iip )
+bool func_info_get( INPUT_HANDLE ih, INPUT_INFO *iip )
 {
     if( !ih || !iip )
         return FALSE;
@@ -833,13 +806,14 @@ BOOL func_info_get( INPUT_HANDLE ih, INPUT_INFO *iip )
     memset( iip, 0, sizeof(INPUT_INFO) );
     if( hp->video_reader != READER_NONE )
     {
-        iip->flag             |= INPUT_INFO_FLAG_VIDEO | INPUT_INFO_FLAG_VIDEO_RANDOM_ACCESS;
+        iip->flag             |= INPUT_INFO_FLAG_VIDEO;
+        if( hp->time_to_frame )
+            iip->flag         |= INPUT_INFO_TIME_TO_FRAME;
         iip->rate              = hp->framerate_num;
         iip->scale             = hp->framerate_den;
         iip->n                 = hp->video_sample_count;
         iip->format            = &hp->video_format;
         iip->format_size       = hp->video_format.biSize;
-        iip->handler           = 0;
     }
     if( hp->audio_reader != READER_NONE )
     {
@@ -873,16 +847,13 @@ int func_read_audio( INPUT_HANDLE ih, int start, int length, void *buf )
     return length;
 }
 
-BOOL func_is_keyframe( INPUT_HANDLE ih, int sample_number )
+int func_time_to_frame( INPUT_HANDLE ih, double time )
 {
     if( !ih )
-        return TRUE;
+        return 0;
 
     lsmash_handler_t *hp = (lsmash_handler_t *)ih;
-    if( sample_number >= hp->video_sample_count )
-        return FALSE;   /* In reading as double framerate, keyframe detection doesn't work at all
-                         * since sample_number exceeds the number of video samples. */
-    return hp->is_keyframe ? hp->is_keyframe( hp, sample_number ) : TRUE;
+    return hp->time_to_frame ? hp->time_to_frame( hp, time ) : time * hp->framerate_num / hp->framerate_den;
 }
 
 static inline void set_buddy_window_for_updown_control
@@ -1020,11 +991,6 @@ static INT_PTR CALLBACK dialog_proc
             set_check_state( hwnd, IDC_CHECK_AV_SYNC, reader_opt_config->av_sync );
             /* no_create_index */
             set_check_state( hwnd, IDC_CHECK_CREATE_INDEX_FILE, !reader_opt_config->no_create_index );
-            /* force stream index */
-            set_check_state( hwnd, IDC_CHECK_FORCE_VIDEO, reader_opt_config->force_video );
-            set_check_state( hwnd, IDC_CHECK_FORCE_AUDIO, reader_opt_config->force_audio );
-            set_int_to_dlg( hwnd, IDC_EDIT_FORCE_VIDEO_INDEX, reader_opt_config->force_video_index );
-            set_int_to_dlg( hwnd, IDC_EDIT_FORCE_AUDIO_INDEX, reader_opt_config->force_audio_index );
             /* forward_seek_threshold */
             set_int_to_dlg( hwnd, IDC_EDIT_FORWARD_THRESHOLD, video_opt_config->forward_seek_threshold );
             set_buddy_window_for_updown_control( hwnd, IDC_SPIN_FORWARD_THRESHOLD, IDC_EDIT_FORWARD_THRESHOLD );
@@ -1045,10 +1011,6 @@ static INT_PTR CALLBACK dialog_proc
             for( int i = 0; i < 3; i++ )
                 SendMessageA( hcombo, CB_ADDSTRING, 0, (LPARAM)field_dominance_list[i] );
             SendMessageA( hcombo, CB_SETCURSEL, video_opt_config->field_dominance, 0 );
-            /* VFR->CFR */
-            set_check_state( hwnd, IDC_CHECK_VFR_TO_CFR, video_opt_config->vfr2cfr.active );
-            set_int_to_dlg( hwnd, IDC_EDIT_CONST_FRAMERATE_NUM, video_opt_config->vfr2cfr.framerate_num );
-            set_int_to_dlg( hwnd, IDC_EDIT_CONST_FRAMERATE_DEN, video_opt_config->vfr2cfr.framerate_den );
             /* LW48 output */
             set_check_state( hwnd, IDC_CHECK_LW48_OUTPUT, video_opt_config->colorspace != 0 );
             /* AVS bit-depth */
@@ -1108,15 +1070,6 @@ static INT_PTR CALLBACK dialog_proc
             set_check_state( hwnd, IDC_CHECK_AVS_INPUT,        !lwinput_opt_config.reader_disabled[1] );
             set_check_state( hwnd, IDC_CHECK_VPY_INPUT,        !lwinput_opt_config.reader_disabled[2] );
             set_check_state( hwnd, IDC_CHECK_LIBAV_INPUT,      !lwinput_opt_config.reader_disabled[3] );
-            /* dummy reader */
-            set_int_to_dlg( hwnd, IDC_EDIT_DUMMY_WIDTH,         video_opt_config->dummy.width );
-            set_int_to_dlg( hwnd, IDC_EDIT_DUMMY_HEIGHT,        video_opt_config->dummy.height );
-            set_int_to_dlg( hwnd, IDC_EDIT_DUMMY_FRAMERATE_NUM, video_opt_config->dummy.framerate_num );
-            set_int_to_dlg( hwnd, IDC_EDIT_DUMMY_FRAMERATE_DEN, video_opt_config->dummy.framerate_den );
-            hcombo = GetDlgItem( hwnd, IDC_COMBOBOX_DUMMY_COLORSPACE );
-            for( int i = 0; i < 3; i++ )
-                SendMessageA( hcombo, CB_ADDSTRING, 0, (LPARAM)dummy_colorspace_list[i] );
-            SendMessageA( hcombo, CB_SETCURSEL, video_opt_config->dummy.colorspace, 0 );
             /* preferred decoders */
             if( reader_opt_config->preferred_decoder_names )
             {
@@ -1205,11 +1158,6 @@ static INT_PTR CALLBACK dialog_proc
                     reader_opt_config->av_sync = get_check_state( hwnd, IDC_CHECK_AV_SYNC );
                     /* no_create_index */
                     reader_opt_config->no_create_index = !get_check_state( hwnd, IDC_CHECK_CREATE_INDEX_FILE );
-                    /* force stream index */
-                    reader_opt_config->force_video = get_check_state( hwnd, IDC_CHECK_FORCE_VIDEO );
-                    reader_opt_config->force_audio = get_check_state( hwnd, IDC_CHECK_FORCE_AUDIO );
-                    reader_opt_config->force_video_index = get_int_from_dlg_with_min( hwnd, IDC_EDIT_FORCE_VIDEO_INDEX, -1 );
-                    reader_opt_config->force_audio_index = get_int_from_dlg_with_min( hwnd, IDC_EDIT_FORCE_AUDIO_INDEX, -1 );
                     /* seek_mode */
                     video_opt_config->seek_mode = SendMessageA( GetDlgItem( hwnd, IDC_COMBOBOX_SEEK_MODE ), CB_GETCURSEL, 0, 0 );
                     /* forward_seek_threshold */
@@ -1221,10 +1169,6 @@ static INT_PTR CALLBACK dialog_proc
                     video_opt_config->apply_repeat_flag = get_check_state( hwnd, IDC_CHECK_APPLY_REPEAT_FLAG );
                     /* field_dominance */
                     video_opt_config->field_dominance = SendMessageA( GetDlgItem( hwnd, IDC_COMBOBOX_FIELD_DOMINANCE ), CB_GETCURSEL, 0, 0 );
-                    /* VFR->CFR */
-                    video_opt_config->vfr2cfr.active = get_check_state( hwnd, IDC_CHECK_VFR_TO_CFR );
-                    video_opt_config->vfr2cfr.framerate_num = get_int_from_dlg_with_min( hwnd, IDC_EDIT_CONST_FRAMERATE_NUM, 1 );
-                    video_opt_config->vfr2cfr.framerate_den = get_int_from_dlg_with_min( hwnd, IDC_EDIT_CONST_FRAMERATE_DEN, 1 );
                     /* LW48 output */
                     video_opt_config->colorspace = (get_check_state( hwnd, IDC_CHECK_LW48_OUTPUT ) ? OUTPUT_LW48 : 0);
                     /* AVS bit-depth */
@@ -1258,12 +1202,6 @@ static INT_PTR CALLBACK dialog_proc
                     lwinput_opt_config.reader_disabled[1] = !get_check_state( hwnd, IDC_CHECK_AVS_INPUT        );
                     lwinput_opt_config.reader_disabled[2] = !get_check_state( hwnd, IDC_CHECK_VPY_INPUT        );
                     lwinput_opt_config.reader_disabled[3] = !get_check_state( hwnd, IDC_CHECK_LIBAV_INPUT      );
-                    /* dummy reader */
-                    video_opt_config->dummy.width         = get_int_from_dlg_with_min( hwnd, IDC_EDIT_DUMMY_WIDTH,  32 );
-                    video_opt_config->dummy.height        = get_int_from_dlg_with_min( hwnd, IDC_EDIT_DUMMY_HEIGHT, 32 );
-                    video_opt_config->dummy.framerate_num = get_int_from_dlg_with_min( hwnd, IDC_EDIT_DUMMY_FRAMERATE_NUM, 1 );
-                    video_opt_config->dummy.framerate_den = get_int_from_dlg_with_min( hwnd, IDC_EDIT_DUMMY_FRAMERATE_DEN, 1 );
-                    video_opt_config->dummy.colorspace    = SendMessageA( GetDlgItem( hwnd, IDC_COMBOBOX_DUMMY_COLORSPACE ), CB_GETCURSEL, 0, 0 );
                     /* preferred decoders */
                     {
                         const int buf_size = 512;
@@ -1303,7 +1241,7 @@ static INT_PTR CALLBACK dialog_proc
 
                     EndDialog( hwnd, IDOK );
                     
-                    MESSAGE_BOX_DESKTOP( MB_OK, "Please relaunch AviUtl for updating settings!" );
+                    MESSAGE_BOX_DESKTOP( MB_OK, "Please relaunch AviUtl ExEdit2 for updating settings!" );
                     
                     return TRUE;
                 }
@@ -1318,7 +1256,7 @@ static INT_PTR CALLBACK dialog_proc
     }
 }
 
-BOOL func_config( HWND hwnd, HINSTANCE dll_hinst )
+bool func_config( HWND hwnd, HINSTANCE dll_hinst )
 {
     const wchar_t* template = L"LWINPUT_CONFIG";
     /* Get Display Height ( Scaled ) */
@@ -1346,6 +1284,10 @@ BOOL WINAPI DllMain( HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpReserved )
     { 
         case DLL_PROCESS_ATTACH:
             hModuleDLL = hinstDLL;
+            break;
+        case DLL_PROCESS_DETACH:
+            if (lpReserved != NULL) break;
+            func_exit();
             break;
     }
     return TRUE;
