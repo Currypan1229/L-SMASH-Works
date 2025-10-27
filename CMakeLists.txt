@@ -156,6 +156,8 @@ if (BUILD_AVS_PLUGIN OR BUILD_VS_PLUGIN)
         "${CMAKE_CURRENT_SOURCE_DIR}/common/utils.h"
         "${CMAKE_CURRENT_SOURCE_DIR}/common/video_output.c"
         "${CMAKE_CURRENT_SOURCE_DIR}/common/video_output.h"
+        "${CMAKE_CURRENT_SOURCE_DIR}/common/xxhash.c"
+        "${CMAKE_CURRENT_SOURCE_DIR}/common/xxhash.h"
     )
 
     if (ENABLE_SSE2)
