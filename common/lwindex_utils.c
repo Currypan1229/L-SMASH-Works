@@ -4,7 +4,7 @@
 
 /* This file is available under an ISC license. */
 
-#include <xxhash.h>
+#include "xxhash.h"
 
 #include "lwindex_utils.h"
 

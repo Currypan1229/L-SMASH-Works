@@ -26,7 +26,7 @@
 #endif
 
 #include <sys/stat.h>
-#include <xxhash.h>
+#include "xxhash.h"
 
 #ifdef __cplusplus
 extern "C" {
